@@ -1,0 +1,75 @@
+baseUrl: /
+locale: en-us
+theme: terminal
+paginate: 7
+
+# EXTRA START
+defaultContentLanguage: en
+title: Sh1nn's Blog
+# googleAnalytics: UA-123456789-1
+# disqusShortname: sh1nn
+# enableGitInfo: true
+enableEmoji: true
+
+taxonomies:
+  tag: tags
+
+permalinks:
+  post: /:contentbasename/
+
+# EXTRA END
+markup:
+  goldmark:
+    extensions:
+      passthrough:
+        delimiters:
+          block:
+            - - "$$"
+              - "$$"
+          inline:
+            - - "$"
+              - "$"
+        enable: true
+
+params:
+  contentTypeName: posts
+  themeColor: green
+  showMenuItems: 3
+  showLanguageSelector: false
+  fullWidthTheme: false
+  centerTheme: true
+  math: true
+
+languages:
+  en:
+    label: English
+    title: "Sh1nn's blog - Penestration Tester and Security Researcher"
+    weight: 1
+
+    params:
+      subtitle: sh1nn
+      keywords: ""
+      menuMore: Show more
+      readMore: Read more
+      readOtherPosts: Read other posts
+      summaryLength: 20
+      logo:
+        logoText: sh1nn's blog
+        logoHomeLink: /
+
+    menu:
+      main:
+        - identifier: posts
+          name: "Posts"
+          url: /posts
+          weight: -1
+
+        - identifier: tags
+          name: "Tags"
+          url: /tags
+          weight: 2
+
+        - identifier: about
+          name: "About"
+          url: /about
+          weight: 3

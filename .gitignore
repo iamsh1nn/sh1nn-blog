@@ -1,0 +1,11 @@
+# Hugo build output
+public/
+resources/
+.hugo_build.lock
+
+# Obsidian personal config (if you use it to edit content)
+.obsidian/
+
+# OS / editor junk
+.DS_Store
+*.swp

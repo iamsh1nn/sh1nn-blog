@@ -1,0 +1,60 @@
+/* Custom CSS overrides for my blog */
+.container {
+	/* default 864px */
+	max-width:1000px;
+}
+
+.post-cover {
+    /* border: none; */
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.post-content p {
+    margin-bottom: 1.4rem;
+}
+
+.post-content .code-toolbar {
+	margin: 1rem 0 1.8rem;
+}
+
+.post-content img {
+	margin-top: 0.5rem;
+	margin: 0.8rem auto 0;
+	border-radius: 5px;
+}
+
+.post h1.post-title {
+    margin-top: 0;
+}
+
+.post span.post-tags {
+    margin-bottom: 0;
+}
+
+.post.on-list:not(:first-child) {
+    margin-bottom: 0;
+    padding-top: 0;
+}
+
+.post.on-list:not(:last-child) {
+    margin-bottom: 2.5rem;
+}
+
+@view-transition {
+  navigation: auto;
+}
+
+:root {
+	view-transition-name: root;
+}
+
+::view-transition-old(root) {
+  animation-timing-function: linear;
+  animation-duration: 500ms;
+}
+
+::view-transition-new(root) {
+  animation-timing-function: linear;
+  animation-duration: 500ms;
+}
