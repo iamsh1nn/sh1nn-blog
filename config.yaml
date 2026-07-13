@@ -55,7 +55,6 @@ languages:
       summaryLength: 20
       logo:
         logoText: sh1nn's blog
-        logoHomeLink: /
 
     menu:
       main:
