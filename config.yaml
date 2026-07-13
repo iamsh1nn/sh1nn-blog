@@ -43,7 +43,7 @@ params:
 languages:
   en:
     label: English
-    title: "Sh1nn's blog - Penestration Tester and Security Researcher"
+    title: "Sh1nn's blog - Penetration Tester and Security Researcher"
     weight: 1
 
     params:
