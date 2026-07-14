@@ -12,7 +12,7 @@ tags:
   - linux
   - privilege-escalation
 description: "A technical walkthrough of Hack The Box TwoMillion, covering invite-code generation, authenticated API enumeration, broken authorization, command injection, credential reuse, and CVE-2023-0386."
-cover: /images/twomillion/2million.png
+cover: images/twomillion/2million.png
 draft: false
 toc: true
 ---
