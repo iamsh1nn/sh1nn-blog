@@ -1,6 +1,6 @@
 ---
 title: "Hello, World"
-date: 2026-07-13
+date: 2026-01-13
 description: "The first post on this blog"
 tags: ["intro"]
 draft: false
