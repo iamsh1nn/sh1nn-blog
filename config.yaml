@@ -1,4 +1,5 @@
 baseUrl: /
+canonifyURLs: true
 locale: en-us
 theme: terminal
 paginate: 7
